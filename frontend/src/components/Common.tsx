@@ -70,3 +70,70 @@ export function Pill({ text, tone = "neutral" }: { text: string; tone?: "neutral
 export function Loading() {
   return <div className="text-sm text-slate py-10 text-center">Loading…</div>;
 }
+
+export function ErrorState({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  return (
+    <div className="card p-8 text-center text-sm" role="alert">
+      <p className="text-clay">{text}</p>
+      {onRetry && (
+        <button className="btn-secondary text-xs py-1.5 px-3 mt-3" onClick={onRetry}>
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function Pagination({
+  page,
+  pages,
+  total,
+  pageSize,
+  onPage,
+}: {
+  page: number;
+  pages: number;
+  total: number;
+  pageSize: number;
+  onPage: (page: number) => void;
+}) {
+  if (total === 0) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(total, page * pageSize);
+  return (
+    <nav className="flex items-center justify-between gap-3 flex-wrap mt-4 text-xs text-slate" aria-label="Pagination">
+      <span>
+        Showing {from}–{to} of {total}
+      </span>
+      <div className="flex items-center gap-2">
+        <button className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-40" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          Previous
+        </button>
+        <span aria-live="polite">
+          Page {page} of {pages}
+        </span>
+        <button className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-40" disabled={page >= pages} onClick={() => onPage(page + 1)}>
+          Next
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+export function Banner({ text, tone = "info", onClose }: { text: string; tone?: "info" | "good" | "bad"; onClose?: () => void }) {
+  const styles = {
+    info: "bg-brass/10 border-brass/20 text-ink",
+    good: "bg-leaf/10 border-leaf/20 text-ink",
+    bad: "bg-clay/10 border-clay/20 text-clay",
+  }[tone];
+  return (
+    <div className={`card p-3.5 mb-4 text-sm flex items-start justify-between gap-3 ${styles}`} role={tone === "bad" ? "alert" : "status"}>
+      <span className="whitespace-pre-line">{text}</span>
+      {onClose && (
+        <button className="text-xs text-slate hover:text-ink shrink-0" onClick={onClose} aria-label="Dismiss message">
+          Dismiss
+        </button>
+      )}
+    </div>
+  );
+}

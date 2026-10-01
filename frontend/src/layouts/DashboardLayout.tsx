@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   type LucideIcon,
   LayoutGrid, CalendarCheck, GraduationCap, ClipboardCheck, Users, BookOpen,
-  Wallet, Library, Megaphone, CalendarDays, Briefcase, Bot, LogOut, Building2, BarChart3, UsersRound,
+  Wallet, Library, Megaphone, CalendarDays, Briefcase, Bot, LogOut, Building2, BarChart3, UsersRound, FileCheck,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -24,6 +24,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: "/student/placement", label: "Placement", icon: Briefcase },
     { to: "/student/announcements", label: "Announcements & Events", icon: Megaphone },
     { to: "/student/campus-life", label: "Campus Life", icon: UsersRound },
+    { to: "/student/od", label: "On-Duty (OD)", icon: FileCheck },
     { to: "/student/assistant", label: "AI Assistant", icon: Bot },
   ],
   faculty: [
@@ -34,6 +35,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: "/faculty/marks", label: "Marks Entry", icon: GraduationCap },
     { to: "/faculty/exams", label: "Exams", icon: ClipboardCheck },
     { to: "/faculty/timetable", label: "Timetable", icon: CalendarDays },
+    { to: "/faculty/od", label: "OD Approvals", icon: FileCheck },
     { to: "/faculty/announcements", label: "Announcements", icon: Megaphone },
     { to: "/faculty/assistant", label: "AI Assistant", icon: Bot },
   ],
@@ -44,6 +46,7 @@ const NAV: Record<string, NavItem[]> = {
     { to: "/admin/departments", label: "Departments", icon: Building2 },
     { to: "/admin/courses", label: "Courses & Subjects", icon: BookOpen },
     { to: "/admin/placement", label: "Placement Portal", icon: Briefcase },
+    { to: "/admin/od", label: "OD Oversight", icon: FileCheck },
     { to: "/admin/reports", label: "Reports & Analytics", icon: BarChart3 },
     { to: "/admin/announcements", label: "Announcements & Events", icon: Megaphone },
     { to: "/admin/assistant", label: "AI Assistant", icon: Bot },

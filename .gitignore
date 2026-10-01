@@ -31,3 +31,6 @@ frontend/playwright-report/
 .idea/
 .DS_Store
 Thumbs.db
+
+# End-to-end test working copy
+backend/e2e/

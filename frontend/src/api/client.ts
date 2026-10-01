@@ -1,7 +1,10 @@
 import axios from "axios";
 
+// Locally the Vite dev server proxies /api to the backend. In production the
+// frontend and backend live on different hosts, so the build is given the
+// backend's address through VITE_API_BASE_URL (e.g. https://api.example.com/api).
 const client = axios.create({
-  baseURL: "/api",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
 });
 
 client.interceptors.request.use((config) => {

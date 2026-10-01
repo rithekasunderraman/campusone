@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Float, ForeignKey, Date, DateTime, Text, Boolean,
-    UniqueConstraint, Index
+    UniqueConstraint, Index, LargeBinary, event
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -310,6 +310,62 @@ class EventVolunteer(Base):
     event = relationship("ClubEvent", back_populates="volunteers")
 
 
+class Institution(Base):
+    """An institution and its configurable policy.
+
+    Only one row exists today. Every table added from the OD workflow onward
+    carries institution_id, so onboarding another institution means adding rows,
+    not changing schema.
+    """
+    __tablename__ = "institutions"
+    id = Column(Integer, primary_key=True)
+    code = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    short_name = Column(String)
+    logo_url = Column(String)
+    primary_color = Column(String)
+    support_email = Column(String)
+
+    # --- OD policy ---
+    od_hours_per_semester = Column(Float, nullable=False, default=40.0)
+    term_start = Column(Date, nullable=False)
+    term_end = Column(Date, nullable=False)
+    min_attendance_pct = Column(Float, nullable=False, default=75.0)
+    # "faculty" = class advisor decides alone; "faculty,hod" = HOD sign-off can be required.
+    approval_chain = Column(String, nullable=False, default="faculty,hod")
+    # With the HOD in the chain, requests longer than this many hours need HOD sign-off (0 = every request).
+    hod_threshold_hours = Column(Float, nullable=False, default=8.0)
+    max_hours_per_request = Column(Float, nullable=False, default=16.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AdvisorAssignment(Base):
+    """Which faculty member is the class advisor (first OD approver) for a student."""
+    __tablename__ = "advisor_assignments"
+    id = Column(Integer, primary_key=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False, unique=True)
+    faculty_id = Column(Integer, ForeignKey("faculty.id"), nullable=False)
+
+    __table_args__ = (Index("ix_advisor_assignments_faculty", "faculty_id"),)
+
+    faculty = relationship("Faculty")
+
+
+class DepartmentHead(Base):
+    """Maps an admin user to the department(s) they head. Admins with no row act institution-wide."""
+    __tablename__ = "department_heads"
+    id = Column(Integer, primary_key=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=False)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    __table_args__ = (UniqueConstraint("department_id", "user_id", name="uq_department_head"),)
+
+    department = relationship("Department")
+    user = relationship("User")
+
+
 class ODRequest(Base):
     __tablename__ = "od_requests"
     id = Column(Integer, primary_key=True)
@@ -318,13 +374,122 @@ class ODRequest(Base):
     requested_hours = Column(Float, nullable=False)
     approved_hours = Column(Float, default=0)
     request_date = Column(DateTime, default=datetime.utcnow)
-    status = Column(String, default="Pending")  # Pending / Approved / Rejected / Cancelled
+    # Coarse legacy status, kept in sync with workflow_state by the workflow engine:
+    # Draft / Pending / Approved / Rejected / Cancelled
+    status = Column(String, default="Pending")
     reason = Column(Text)
     reviewed_by_faculty_id = Column(Integer, ForeignKey("faculty.id"))
+
+    # --- Enterprise workflow (added in migration 0002) ---
+    institution_id = Column(Integer, ForeignKey("institutions.id"))
+    workflow_state = Column(String)
+    event_name = Column(String)
+    organizer = Column(String)
+    venue = Column(String)
+    start_at = Column(DateTime)
+    end_at = Column(DateTime)
+    submitted_at = Column(DateTime)
+    decided_at = Column(DateTime)
+    cancelled_at = Column(DateTime)
+    advisor_faculty_id = Column(Integer, ForeignKey("faculty.id"))
+    hod_user_id = Column(Integer, ForeignKey("users.id"))
+    requires_hod = Column(Boolean, default=False)
+    clarification_requested = Column(Boolean, default=False)
+    clarification_text = Column(Text)
+    clarification_response = Column(Text)
+    decision_comment = Column(Text)
+    # Advisory AI/document review flags (JSON list). Never drives status.
+    review_flags = Column(Text)
+    # Optimistic concurrency: every state change must present the version it read.
+    version = Column(Integer, nullable=False, default=1, server_default="1")
+
+    __table_args__ = (
+        Index("ix_od_requests_student_state", "student_id", "workflow_state"),
+        Index("ix_od_requests_advisor_state", "advisor_faculty_id", "workflow_state"),
+        Index("ix_od_requests_state", "workflow_state"),
+    )
 
     student = relationship("Student", back_populates="od_requests")
     event = relationship("ClubEvent")
     reviewed_by = relationship("Faculty", foreign_keys=[reviewed_by_faculty_id])
+    advisor = relationship("Faculty", foreign_keys=[advisor_faculty_id])
+    hod_user = relationship("User", foreign_keys=[hod_user_id])
+    documents = relationship("ODDocument", back_populates="request", order_by="ODDocument.id")
+    audit_logs = relationship("ODAuditLog", back_populates="request", order_by="ODAuditLog.id")
+    attendance_credits = relationship("ODAttendanceCredit", back_populates="request")
+
+
+class ODDocument(Base):
+    __tablename__ = "od_documents"
+    id = Column(Integer, primary_key=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=False)
+    request_id = Column(Integer, ForeignKey("od_requests.id"), nullable=False)
+    filename = Column(String, nullable=False)
+    storage_path = Column(String, nullable=False)  # key understood by the storage backend
+    content_type = Column(String)
+    size_bytes = Column(Integer)
+    sha256 = Column(String)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    extracted_text = Column(Text)
+    extraction_status = Column(String, default="pending")
+    extracted_fields = Column(Text)  # JSON, each field tagged extracted/inferred + confidence
+
+    __table_args__ = (
+        Index("ix_od_documents_request", "request_id"),
+        Index("ix_od_documents_sha", "sha256"),
+    )
+
+    request = relationship("ODRequest", back_populates="documents")
+
+
+class ODAuditLog(Base):
+    """Append-only record of every OD state transition (see od_workflow)."""
+    __tablename__ = "od_audit_logs"
+    id = Column(Integer, primary_key=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=False)
+    request_id = Column(Integer, ForeignKey("od_requests.id"), nullable=False)
+    actor_user_id = Column(Integer, ForeignKey("users.id"))  # NULL = system
+    actor_role = Column(String, nullable=False)  # student | faculty | admin | system
+    action = Column(String, nullable=False)
+    old_state = Column(String)
+    new_state = Column(String, nullable=False)
+    comment = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (Index("ix_od_audit_request", "request_id"),)
+
+    request = relationship("ODRequest", back_populates="audit_logs")
+    actor = relationship("User")
+
+
+class ODAttendanceCredit(Base):
+    """Classes a student is excused from because of an approved OD request."""
+    __tablename__ = "od_attendance_credits"
+    id = Column(Integer, primary_key=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=False)
+    request_id = Column(Integer, ForeignKey("od_requests.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    classes_credited = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("request_id", "subject_id", name="uq_od_credit_request_subject"),
+        Index("ix_od_credits_student", "student_id"),
+    )
+
+    request = relationship("ODRequest", back_populates="attendance_credits")
+    subject = relationship("Subject")
+
+
+class StoredFile(Base):
+    """Blob storage used when STORAGE_BACKEND=database (no external object store needed)."""
+    __tablename__ = "stored_files"
+    key = Column(String, primary_key=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=False)
+    content = Column(LargeBinary, nullable=False)
+    content_type = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Company(Base):
@@ -371,3 +536,38 @@ class ChatHistory(Base):
     message = Column(Text)
     response = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Integrity guards (enforced in code, not by convention)
+# ---------------------------------------------------------------------------
+
+class ODStateWriteForbidden(RuntimeError):
+    """Raised when something other than the workflow engine tries to change OD status."""
+
+
+def _forbid_direct_state_write(target, value, oldvalue, initiator):
+    # Setting the value while constructing a brand-new row is fine. Changing it on
+    # a row that already exists in the database is only legal through
+    # od_workflow.transition(), which issues a version-checked UPDATE and writes
+    # the audit row. Document/AI code therefore cannot alter a request's status
+    # even by mistake.
+    from sqlalchemy import inspect as _inspect
+    if _inspect(target).persistent and value != oldvalue:
+        raise ODStateWriteForbidden(
+            "OD status can only change through od_workflow.transition() by an authorised human action."
+        )
+
+
+event.listen(ODRequest.status, "set", _forbid_direct_state_write, active_history=True)
+event.listen(ODRequest.workflow_state, "set", _forbid_direct_state_write, active_history=True)
+
+
+@event.listens_for(ODAuditLog, "before_update")
+def _audit_no_update(mapper, connection, target):
+    raise RuntimeError("OD audit log rows are immutable and cannot be updated.")
+
+
+@event.listens_for(ODAuditLog, "before_delete")
+def _audit_no_delete(mapper, connection, target):
+    raise RuntimeError("OD audit log rows are immutable and cannot be deleted.")

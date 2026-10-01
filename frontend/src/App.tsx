@@ -13,6 +13,9 @@ import StudentLibrary from "./pages/student/Library";
 import StudentPlacement from "./pages/student/Placement";
 import StudentAnnouncements from "./pages/student/Announcements";
 import CampusLife from "./pages/student/CampusLife";
+import StudentODDashboard from "./pages/student/ODDashboard";
+import StudentODApply from "./pages/student/ODApply";
+import StudentODDetail from "./pages/student/ODDetail";
 
 import FacultyDashboard from "./pages/faculty/Dashboard";
 import FacultySubjects from "./pages/faculty/Subjects";
@@ -22,6 +25,7 @@ import FacultyMarks from "./pages/faculty/Marks";
 import FacultyExams from "./pages/faculty/Exams";
 import FacultyTimetable from "./pages/faculty/Timetable";
 import FacultyAnnouncements from "./pages/faculty/Announcements";
+import FacultyODQueue from "./pages/faculty/ODQueue";
 
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminStudents from "./pages/admin/Students";
@@ -31,6 +35,7 @@ import AdminCourses from "./pages/admin/Courses";
 import AdminPlacement from "./pages/admin/Placement";
 import AdminReports from "./pages/admin/Reports";
 import AdminAnnouncements from "./pages/admin/Announcements";
+import AdminODOversight from "./pages/admin/ODOversight";
 
 import AIAssistant from "./pages/AIAssistant";
 
@@ -66,6 +71,9 @@ export default function App() {
         <Route path="placement" element={<StudentPlacement />} />
         <Route path="announcements" element={<StudentAnnouncements />} />
         <Route path="campus-life" element={<CampusLife />} />
+        <Route path="od" element={<StudentODDashboard />} />
+        <Route path="od/new" element={<StudentODApply />} />
+        <Route path="od/:id" element={<StudentODDetail />} />
         <Route path="assistant" element={<AIAssistant />} />
       </Route>
 
@@ -85,6 +93,7 @@ export default function App() {
         <Route path="exams" element={<FacultyExams />} />
         <Route path="timetable" element={<FacultyTimetable />} />
         <Route path="announcements" element={<FacultyAnnouncements />} />
+        <Route path="od" element={<FacultyODQueue />} />
         <Route path="assistant" element={<AIAssistant />} />
       </Route>
 
@@ -104,6 +113,7 @@ export default function App() {
         <Route path="placement" element={<AdminPlacement />} />
         <Route path="reports" element={<AdminReports />} />
         <Route path="announcements" element={<AdminAnnouncements />} />
+        <Route path="od" element={<AdminODOversight />} />
         <Route path="assistant" element={<AIAssistant />} />
       </Route>
 

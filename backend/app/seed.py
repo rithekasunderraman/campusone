@@ -575,6 +575,12 @@ def run():
     db.commit()
 
     db.close()
+
+    # Institution policy, class advisors, department heads and OD workflow columns.
+    from .od_bootstrap import ensure_od_foundation
+    with engine.begin() as conn:
+        ensure_od_foundation(conn)
+
     print("Database seeded successfully.")
     print("Demo accounts:")
     print("  Admin:   admin / admin123")
@@ -583,4 +589,19 @@ def run():
 
 
 if __name__ == "__main__":
+    # Seeding DROPS every table first. Refuse to do that to a database that
+    # already holds data unless it is asked for explicitly, and never in production.
+    import sys
+    from sqlalchemy import inspect, text
+    from . import config
+
+    if config.IS_PRODUCTION:
+        sys.exit("Refusing to seed: APP_ENV=production.")
+    has_users = False
+    if "users" in inspect(engine).get_table_names():
+        with engine.connect() as _conn:
+            has_users = bool(_conn.execute(text("select count(*) from users")).scalar())
+    if has_users and "--force-reset" not in sys.argv:
+        sys.exit("This database already contains data. Seeding would DELETE all of it. "
+                 "Back it up first, then re-run with:  python -m app.seed --force-reset")
     run()

@@ -51,3 +51,18 @@ def subject_summary(s: models.Subject) -> dict:
         "credits": s.credits,
         "faculty_name": s.faculty.user.full_name if s.faculty else None,
     }
+
+
+def paginate(query, page: int = 1, page_size: int = 20, serialise=lambda row: row, max_page_size: int = 100) -> dict:
+    """Run a query one page at a time and return a uniform envelope."""
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or 20), max_page_size))
+    total = query.order_by(None).count()
+    rows = query.offset((page - 1) * page_size).limit(page_size).all()
+    return {
+        "items": [serialise(r) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": max(1, -(-total // page_size)),
+    }

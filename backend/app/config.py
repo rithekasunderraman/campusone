@@ -16,6 +16,8 @@ load_dotenv(BACKEND_DIR / ".env")
 
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 IS_PRODUCTION = APP_ENV == "production"
+# Free-text label reported by /api/health; the end-to-end test backend sets "e2e".
+APP_INSTANCE = os.getenv("APP_INSTANCE", "").strip()
 
 # Well-known development fallback. It is public (it was committed in the original
 # code), so it must never be accepted in production.
