@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useFetch } from "../../hooks/useFetch";
-import { PageHeader, Loading, EmptyState, StatCard, Pill } from "../../components/Common";
+import { PageHeader, Loading, EmptyState, StatCard, Pill, Pagination } from "../../components/Common";
+import type { Page } from "../../components/OD";
 import client from "../../api/client";
 
 interface Company { id: number; name: string; role: string; ctc_lpa: number; min_cgpa: number; eligible_departments: string[]; description: string }
@@ -21,7 +22,14 @@ const statusTone = (s: string) => (s === "Offered" ? "good" : s === "Rejected" ?
 export default function AdminPlacement() {
   const { data: companies, loading: loadingCompanies, reload: reloadCompanies } = useFetch<Company[]>("/placement/companies");
   const { data: drives, loading: loadingDrives, reload: reloadDrives } = useFetch<Drive[]>("/placement/drives");
-  const { data: applications, loading: loadingApps, reload: reloadApps } = useFetch<ApplicationRow[]>("/placement/admin/applications");
+  const [appSearch, setAppSearch] = useState("");
+  const [appStatus, setAppStatus] = useState("");
+  const [appPage, setAppPage] = useState(1);
+  const appParams = new URLSearchParams({ page: String(appPage), page_size: "20" });
+  if (appSearch.trim()) appParams.set("q", appSearch.trim());
+  if (appStatus) appParams.set("status", appStatus);
+  const { data: appData, loading: loadingApps, refresh: reloadApps } = useFetch<Page<ApplicationRow>>(`/placement/admin/applications?${appParams}`);
+  const applications = appData?.items;
   const { data: analytics, loading: loadingAnalytics } = useFetch<Analytics>("/placement/admin/analytics");
 
   const [showCompanyForm, setShowCompanyForm] = useState(false);
@@ -158,8 +166,20 @@ export default function AdminPlacement() {
         </div>
       </div>
 
-      <p className="font-display text-lg text-ink mb-3">Applications</p>
-      {loadingApps ? <Loading /> : !applications || applications.length === 0 ? (
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <p className="font-display text-lg text-ink">Applications{appData ? ` (${appData.total.toLocaleString()})` : ""}</p>
+        <div className="flex gap-2 flex-wrap">
+          <label htmlFor="app-status" className="sr-only">Filter by status</label>
+          <select id="app-status" className="input w-40" value={appStatus} onChange={(e) => { setAppStatus(e.target.value); setAppPage(1); }}>
+            <option value="">Any status</option>
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <label htmlFor="app-search" className="sr-only">Search applications</label>
+          <input id="app-search" className="input w-64" placeholder="Search student, reg. no. or company" value={appSearch}
+            onChange={(e) => { setAppSearch(e.target.value); setAppPage(1); }} />
+        </div>
+      </div>
+      {loadingApps && !appData ? <Loading /> : !applications || applications.length === 0 ? (
         <EmptyState text="No applications yet." />
       ) : (
         <div className="card p-5 overflow-x-auto">
@@ -184,6 +204,7 @@ export default function AdminPlacement() {
               ))}
             </tbody>
           </table>
+          {appData && <Pagination page={appData.page} pages={appData.pages} total={appData.total} pageSize={appData.page_size} onPage={setAppPage} />}
         </div>
       )}
     </div>

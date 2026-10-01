@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useFetch } from "../../hooks/useFetch";
-import { PageHeader, Loading, EmptyState, Pill } from "../../components/Common";
+import type { Page } from "../../components/OD";
+import { Pagination, PageHeader, Loading, EmptyState, Pill } from "../../components/Common";
 import client from "../../api/client";
 
 interface Subject { id: number; code: string; name: string }
@@ -15,10 +16,12 @@ const gradeTone = (g: string): "good" | "warn" | "bad" =>
 export default function FacultyMarks() {
   const { data: subjects, loading: loadingSubjects } = useFetch<Subject[]>("/faculty/subjects");
   const [subjectId, setSubjectId] = useState<string>("");
-  const { data, loading, reload } = useFetch<MarkRow[]>(
-    subjectId ? `/faculty/marks?subject_id=${subjectId}` : null,
-    [subjectId]
-  );
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const query = new URLSearchParams({ subject_id: subjectId, page: String(page), page_size: "25" });
+  if (search.trim()) query.set("q", search.trim());
+  const { data, loading, refresh } = useFetch<Page<MarkRow>>(subjectId ? `/faculty/marks?${query}` : null);
+  const reload = refresh; // after a save, update the rows without flashing the loading state
   const [rows, setRows] = useState<MarkRow[]>([]);
   const [saving, setSaving] = useState<number | null>(null);
   const [message, setMessage] = useState("");
@@ -28,7 +31,7 @@ export default function FacultyMarks() {
   }, [subjects]);
 
   useEffect(() => {
-    setRows(data || []);
+    setRows(data?.items || []);
   }, [data]);
 
   const updateRow = (id: number, field: "internal_1" | "internal_2" | "assignment" | "external", value: number) => {
@@ -61,17 +64,23 @@ export default function FacultyMarks() {
         title="Marks Entry"
         subtitle="Enter internal, assignment, and external marks per student"
         action={
-          <select className="input w-64" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-            {(subjects || []).map((s) => (
-              <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
-            ))}
-          </select>
+          <div className="flex gap-2 flex-wrap">
+            <label htmlFor="f-subject" className="sr-only">Subject</label>
+            <select id="f-subject" className="input w-64" value={subjectId} onChange={(e) => { setSubjectId(e.target.value); setPage(1); }}>
+              {(subjects || []).map((s) => (
+                <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
+              ))}
+            </select>
+            <label htmlFor="f-search" className="sr-only">Search students</label>
+            <input id="f-search" className="input w-56" placeholder="Search by name or reg. no." value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+          </div>
         }
       />
 
       {message && <div className="card p-3.5 mb-4 text-sm text-ink bg-brass/10 border-brass/20">{message}</div>}
 
-      {loadingSubjects || loading ? (
+      {loadingSubjects || (loading && !data) ? (
         <Loading />
       ) : rows.length === 0 ? (
         <EmptyState text="No students found for this subject." />
@@ -120,6 +129,7 @@ export default function FacultyMarks() {
               })}
             </tbody>
           </table>
+          {data && <Pagination page={data.page} pages={data.pages} total={data.total} pageSize={data.page_size} onPage={setPage} />}
         </div>
       )}
     </div>

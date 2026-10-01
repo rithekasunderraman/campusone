@@ -96,6 +96,7 @@ function PolicyForm() {
     }
   };
   return (
+    <>
     <div className="card p-6 max-w-3xl">
       <p className="font-display text-lg text-ink">{form.institution} — OD policy</p>
       <p className="text-sm text-slate mt-1">Current term: {form.term_start} to {form.term_end}. These settings drive every eligibility check and approval route.</p>
@@ -118,6 +119,55 @@ function PolicyForm() {
           num("hod_threshold_hours", "HOD sign-off above (hours)", "Requests longer than this go to the HOD after the class advisor. 0 = every request.")}
       </div>
       {form.can_edit && <button className="btn-primary mt-5" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save policy"}</button>}
+    </div>
+    <InstitutionForm canEdit={form.can_edit} />
+    </>
+  );
+}
+
+interface InstitutionProfile { name: string; short_name: string | null; support_email: string | null; logo_url: string | null; primary_color: string | null }
+
+function InstitutionForm({ canEdit }: { canEdit: boolean }) {
+  const { data, loading } = useFetch<InstitutionProfile>("/institution");
+  const [form, setForm] = useState({ name: "", short_name: "", support_email: "" });
+  const [message, setMessage] = useState<{ text: string; tone: "good" | "bad" } | null>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (data) setForm({ name: data.name, short_name: data.short_name || "", support_email: data.support_email || "" });
+  }, [data]);
+  if (loading && !data) return null;
+  const save = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      await client.put("/admin/institution", { ...form, logo_url: data?.logo_url || "", primary_color: data?.primary_color || "" });
+      setMessage({ text: "Institution profile saved. The name appears in the sidebar on the next page load.", tone: "good" });
+    } catch (err) {
+      setMessage({ text: errorMessage(err), tone: "bad" });
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="card p-6 max-w-3xl mt-6">
+      <p className="font-display text-lg text-ink">Institution profile</p>
+      <p className="text-sm text-slate mt-1">Shown across the portal. Each institution has its own profile and its own OD policy.</p>
+      {message && <div className="mt-4"><Banner text={message.text} tone={message.tone} onClose={() => setMessage(null)} /></div>}
+      <div className="grid sm:grid-cols-2 gap-4 mt-5">
+        <div>
+          <label htmlFor="inst-name" className="block text-xs text-slate mb-1">Institution name</label>
+          <input id="inst-name" className="input" disabled={!canEdit} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </div>
+        <div>
+          <label htmlFor="inst-short" className="block text-xs text-slate mb-1">Short name</label>
+          <input id="inst-short" className="input" disabled={!canEdit} value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} />
+        </div>
+        <div>
+          <label htmlFor="inst-email" className="block text-xs text-slate mb-1">Support email</label>
+          <input id="inst-email" type="email" className="input" disabled={!canEdit} value={form.support_email} onChange={(e) => setForm({ ...form, support_email: e.target.value })} />
+        </div>
+      </div>
+      {canEdit && <button className="btn-primary mt-5" disabled={saving || !form.name.trim()} onClick={save}>{saving ? "Saving…" : "Save profile"}</button>}
     </div>
   );
 }

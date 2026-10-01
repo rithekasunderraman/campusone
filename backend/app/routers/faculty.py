@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, joinedload
 from typing import Optional, List
 
 from .. import models
 from ..database import get_db
 from ..auth import require_role
-from ..utils import get_faculty_or_404, attendance_pct, mark_total, student_summary, subject_summary
+from ..utils import get_faculty_or_404, attendance_pct, mark_total, student_summary, subject_summary, paginate
 
 router = APIRouter(prefix="/api/faculty", tags=["faculty"])
 require_faculty = require_role("faculty")
@@ -66,42 +67,69 @@ def subjects(db: Session = Depends(get_db), user: models.User = Depends(require_
     return [subject_summary(s) for s in subs]
 
 
+def _name_filter(query, q: Optional[str]):
+    """Search a query joined to Student and User by student name or register number."""
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        query = query.filter(or_(func.lower(models.User.full_name).like(like),
+                                 func.lower(models.Student.register_number).like(like)))
+    return query
+
+
 @router.get("/students")
-def students(subject_id: Optional[int] = None, db: Session = Depends(get_db),
+def students(subject_id: Optional[int] = None, page: Optional[int] = None, page_size: int = 25,
+             q: Optional[str] = None, db: Session = Depends(get_db),
              user: models.User = Depends(require_faculty)):
     fac = get_faculty_or_404(db, user)
     subject_ids = [subject_id] if subject_id else [s.id for s in
                     db.query(models.Subject).filter(models.Subject.faculty_id == fac.id)]
     if subject_id:
         _owned_subject_or_404(db, fac, subject_id)
-    student_ids = (
+    enrolled = (
         db.query(models.Attendance.student_id)
         .filter(models.Attendance.subject_id.in_(subject_ids))
         .distinct()
-        .all()
     )
-    sts = db.query(models.Student).filter(models.Student.id.in_([s[0] for s in student_ids])).all()
-    return [student_summary(s) for s in sts]
+    query = (
+        db.query(models.Student)
+        .join(models.User, models.User.id == models.Student.user_id)
+        .options(joinedload(models.Student.user), joinedload(models.Student.department))
+        .filter(models.Student.id.in_(enrolled))
+    )
+    query = _name_filter(query, q).order_by(models.Student.id)
+    if page is None:
+        return [student_summary(s) for s in query.all()]
+    return paginate(query, page, page_size, student_summary)
+
+
+def _attendance_row(a: models.Attendance) -> dict:
+    return {
+        "attendance_id": a.id,
+        "student_id": a.student_id,
+        "register_number": a.student.register_number,
+        "full_name": a.student.user.full_name,
+        "total_classes": a.total_classes,
+        "attended_classes": a.attended_classes,
+        "percentage": attendance_pct(a),
+    }
 
 
 @router.get("/attendance")
-def get_attendance(subject_id: int, db: Session = Depends(get_db),
-                    user: models.User = Depends(require_faculty)):
+def get_attendance(subject_id: int, page: Optional[int] = None, page_size: int = 25, q: Optional[str] = None,
+                    db: Session = Depends(get_db), user: models.User = Depends(require_faculty)):
     fac = get_faculty_or_404(db, user)
     subj = _owned_subject_or_404(db, fac, subject_id)
-    records = db.query(models.Attendance).filter(models.Attendance.subject_id == subj.id).all()
-    return [
-        {
-            "attendance_id": a.id,
-            "student_id": a.student_id,
-            "register_number": a.student.register_number,
-            "full_name": a.student.user.full_name,
-            "total_classes": a.total_classes,
-            "attended_classes": a.attended_classes,
-            "percentage": attendance_pct(a),
-        }
-        for a in records
-    ]
+    query = (
+        db.query(models.Attendance)
+        .join(models.Student, models.Student.id == models.Attendance.student_id)
+        .join(models.User, models.User.id == models.Student.user_id)
+        .options(joinedload(models.Attendance.student).joinedload(models.Student.user))
+        .filter(models.Attendance.subject_id == subj.id)
+    )
+    query = _name_filter(query, q).order_by(models.Attendance.id)
+    if page is None:
+        return [_attendance_row(a) for a in query.all()]
+    return paginate(query, page, page_size, _attendance_row)
 
 
 class AttendanceUpdate(BaseModel):
@@ -123,26 +151,37 @@ def update_attendance(payload: AttendanceUpdate, db: Session = Depends(get_db),
     return {"message": "Attendance updated", "percentage": attendance_pct(record)}
 
 
+def _mark_row(m: models.Mark) -> dict:
+    return {
+        "mark_id": m.id,
+        "student_id": m.student_id,
+        "register_number": m.student.register_number,
+        "full_name": m.student.user.full_name,
+        "internal_1": m.internal_1,
+        "internal_2": m.internal_2,
+        "assignment": m.assignment,
+        "external": m.external,
+        "total": mark_total(m),
+        "grade": m.grade,
+    }
+
+
 @router.get("/marks")
-def get_marks(subject_id: int, db: Session = Depends(get_db), user: models.User = Depends(require_faculty)):
+def get_marks(subject_id: int, page: Optional[int] = None, page_size: int = 25, q: Optional[str] = None,
+              db: Session = Depends(get_db), user: models.User = Depends(require_faculty)):
     fac = get_faculty_or_404(db, user)
     subj = _owned_subject_or_404(db, fac, subject_id)
-    records = db.query(models.Mark).filter(models.Mark.subject_id == subj.id).all()
-    return [
-        {
-            "mark_id": m.id,
-            "student_id": m.student_id,
-            "register_number": m.student.register_number,
-            "full_name": m.student.user.full_name,
-            "internal_1": m.internal_1,
-            "internal_2": m.internal_2,
-            "assignment": m.assignment,
-            "external": m.external,
-            "total": mark_total(m),
-            "grade": m.grade,
-        }
-        for m in records
-    ]
+    query = (
+        db.query(models.Mark)
+        .join(models.Student, models.Student.id == models.Mark.student_id)
+        .join(models.User, models.User.id == models.Student.user_id)
+        .options(joinedload(models.Mark.student).joinedload(models.Student.user))
+        .filter(models.Mark.subject_id == subj.id)
+    )
+    query = _name_filter(query, q).order_by(models.Mark.id)
+    if page is None:
+        return [_mark_row(m) for m in query.all()]
+    return paginate(query, page, page_size, _mark_row)
 
 
 class MarksUpdate(BaseModel):

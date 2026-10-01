@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   type LucideIcon,
   LayoutGrid, CalendarCheck, GraduationCap, ClipboardCheck, Users, BookOpen,
-  Wallet, Library, Megaphone, CalendarDays, Briefcase, Bot, LogOut, Building2, BarChart3, UsersRound, FileCheck,
+  Wallet, Library, Megaphone, CalendarDays, Briefcase, Bot, LogOut, Building2, BarChart3, UsersRound, FileCheck, Menu,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useFetch } from "../hooks/useFetch";
 
 interface NavItem {
   to: string;
@@ -56,16 +58,22 @@ const NAV: Record<string, NavItem[]> = {
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { data: institution } = useFetch<{ name: string }>("/institution");
 
   if (!user) return null;
   const items = NAV[user.role];
 
   return (
     <div className="min-h-screen flex bg-paper">
-      <aside className="w-64 shrink-0 bg-navy text-paper flex flex-col">
+      {menuOpen && <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+      <aside
+        id="main-navigation"
+        className={`${menuOpen ? "fixed inset-y-0 left-0 z-40 flex" : "hidden"} md:static md:flex w-64 shrink-0 bg-navy text-paper flex-col`}
+      >
         <div className="px-5 py-6 border-b border-white/10">
           <p className="font-display text-lg leading-tight">CampusOne <span className="text-brassLight">AI</span></p>
-          <p className="text-[11px] text-paper/50 mt-0.5 capitalize">{user.role} portal</p>
+          <p className="text-[11px] text-paper/50 mt-0.5"><span className="capitalize">{user.role}</span> portal{institution?.name ? ` · ${institution.name}` : ""}</p>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {items.map((item) => (
@@ -73,6 +81,7 @@ export default function DashboardLayout() {
               key={item.to}
               to={item.to}
               end={item.to === `/${user.role}`}
+              onClick={() => setMenuOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                   isActive ? "bg-white/10 text-white font-medium" : "text-paper/70 hover:bg-white/5 hover:text-white"
@@ -98,8 +107,17 @@ export default function DashboardLayout() {
         </div>
       </aside>
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-black/5 bg-white flex items-center justify-between px-8">
-          <div />
+        <header className="h-16 border-b border-black/5 bg-white flex items-center justify-between px-4 md:px-8">
+          <button
+            className="md:hidden p-2 -ml-2 rounded-lg text-ink hover:bg-black/[0.04]"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label="Open navigation menu"
+            aria-expanded={menuOpen}
+            aria-controls="main-navigation"
+          >
+            <Menu size={20} />
+          </button>
+          <div className="hidden md:block" />
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-sm font-medium text-ink leading-tight">{user.full_name}</p>
@@ -110,7 +128,7 @@ export default function DashboardLayout() {
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <Outlet />
         </main>
       </div>

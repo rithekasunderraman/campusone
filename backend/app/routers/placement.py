@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from typing import Optional
+
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, joinedload
 from datetime import date, datetime
 
 from .. import models
 from ..database import get_db
 from ..auth import require_role
-from ..utils import get_student_or_404
+from ..utils import get_student_or_404, paginate
 
 router = APIRouter(prefix="/api/placement", tags=["placement"])
 require_student = require_role("student")
@@ -131,21 +134,42 @@ def create_drive(payload: DriveCreate, db: Session = Depends(get_db), user: mode
     return {"message": "Placement drive created", "id": d.id}
 
 
+def _application_row(a: models.Application) -> dict:
+    return {
+        "id": a.id, "student_name": a.student.user.full_name,
+        "register_number": a.student.register_number, "department": a.student.department.code,
+        "cgpa": a.student.cgpa, "company": a.drive.company.name, "status": a.status,
+        "applied_on": a.applied_on.isoformat(),
+    }
+
+
 @router.get("/admin/applications")
-def all_applications(drive_id: int = None, db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
-    q = db.query(models.Application)
+def all_applications(drive_id: int = None, page: Optional[int] = None, page_size: int = 25,
+                     q: Optional[str] = None, status: Optional[str] = None,
+                     db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
+    query = (
+        db.query(models.Application)
+        .join(models.Student, models.Student.id == models.Application.student_id)
+        .join(models.User, models.User.id == models.Student.user_id)
+        .join(models.PlacementDrive, models.PlacementDrive.id == models.Application.drive_id)
+        .join(models.Company, models.Company.id == models.PlacementDrive.company_id)
+        .options(joinedload(models.Application.student).joinedload(models.Student.user),
+                 joinedload(models.Application.student).joinedload(models.Student.department),
+                 joinedload(models.Application.drive).joinedload(models.PlacementDrive.company))
+    )
     if drive_id:
-        q = q.filter(models.Application.drive_id == drive_id)
-    apps = q.all()
-    return [
-        {
-            "id": a.id, "student_name": a.student.user.full_name,
-            "register_number": a.student.register_number, "department": a.student.department.code,
-            "cgpa": a.student.cgpa, "company": a.drive.company.name, "status": a.status,
-            "applied_on": a.applied_on.isoformat(),
-        }
-        for a in apps
-    ]
+        query = query.filter(models.Application.drive_id == drive_id)
+    if status:
+        query = query.filter(models.Application.status == status)
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        query = query.filter(or_(func.lower(models.User.full_name).like(like),
+                                 func.lower(models.Student.register_number).like(like),
+                                 func.lower(models.Company.name).like(like)))
+    query = query.order_by(models.Application.id)
+    if page is None:
+        return [_application_row(a) for a in query.all()]
+    return paginate(query, page, page_size, _application_row)
 
 
 class ApplicationStatusUpdate(BaseModel):

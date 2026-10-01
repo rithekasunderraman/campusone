@@ -1,11 +1,13 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .. import models
 from ..database import get_db
 from ..auth import require_role
-from ..utils import attendance_pct, mark_total, student_summary, subject_summary
+from ..utils import attendance_pct, mark_total, student_summary, subject_summary, paginate
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 require_admin = require_role("admin")
@@ -88,39 +90,70 @@ def dashboard(db: Session = Depends(get_db), user: models.User = Depends(require
 
 
 @router.get("/students")
-def students(db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
-    records = (
+def students(page: Optional[int] = None, page_size: int = 25, q: Optional[str] = None,
+             department_id: Optional[int] = None,
+             db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
+    """Student directory. With `page` the result is paginated and searched on the
+    server; without it the full list is returned (original behaviour)."""
+    query = (
         db.query(models.Student)
+        .join(models.User, models.User.id == models.Student.user_id)
+        .join(models.Department, models.Department.id == models.Student.department_id)
         .options(joinedload(models.Student.user), joinedload(models.Student.department))
-        .all()
     )
-    return [student_summary(s) for s in records]
+    if department_id is not None:
+        query = query.filter(models.Student.department_id == department_id)
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        query = query.filter(or_(func.lower(models.User.full_name).like(like),
+                                 func.lower(models.Student.register_number).like(like),
+                                 func.lower(models.Department.code).like(like),
+                                 func.lower(models.User.email).like(like)))
+    query = query.order_by(models.Student.id)
+    if page is None:
+        return [student_summary(s) for s in query.all()]
+    return paginate(query, page, page_size, student_summary)
+
+
+def _faculty_row(f: models.Faculty) -> dict:
+    return {
+        "id": f.id,
+        "employee_code": f.employee_code,
+        "full_name": f.user.full_name,
+        "designation": f.designation,
+        "department": f.department.name,
+        "office": f.office,
+        "subjects_count": len(f.subjects),
+        "email": f.user.email,
+    }
 
 
 @router.get("/faculty")
-def faculty(db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
-    records = (
+def faculty(page: Optional[int] = None, page_size: int = 24, q: Optional[str] = None,
+            department_id: Optional[int] = None,
+            db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
+    query = (
         db.query(models.Faculty)
+        .join(models.User, models.User.id == models.Faculty.user_id)
+        .join(models.Department, models.Department.id == models.Faculty.department_id)
         .options(
             joinedload(models.Faculty.user),
             joinedload(models.Faculty.department),
             selectinload(models.Faculty.subjects),
         )
-        .all()
     )
-    return [
-        {
-            "id": f.id,
-            "employee_code": f.employee_code,
-            "full_name": f.user.full_name,
-            "designation": f.designation,
-            "department": f.department.name,
-            "office": f.office,
-            "subjects_count": len(f.subjects),
-            "email": f.user.email,
-        }
-        for f in records
-    ]
+    if department_id is not None:
+        query = query.filter(models.Faculty.department_id == department_id)
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        query = query.filter(or_(func.lower(models.User.full_name).like(like),
+                                 func.lower(models.Department.name).like(like),
+                                 func.lower(models.Department.code).like(like),
+                                 func.lower(models.Faculty.employee_code).like(like)))
+    query = query.order_by(models.Faculty.id)
+    if page is None:
+        return [_faculty_row(f) for f in query.all()]
+    return paginate(query, page, page_size, _faculty_row)
 
 
 @router.get("/departments")
