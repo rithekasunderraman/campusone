@@ -1,0 +1,33 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / build output
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Secrets and local data
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+*.db.*
+*.bak
+backend/backups/
+backend/storage/
+
+# Test artefacts
+frontend/test-results/
+frontend/playwright-report/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
