@@ -1,9 +1,12 @@
 # CampusOne — Status Report
 
-Date: 2026-10-01 · Branch `main` · 9 commits: a baseline, then one per phase (7+8, 9+10 and 11+12 share commits).
+Date: 2026-10-01 · Branch `main`
 
-**Live deployed URL: none yet.** Deployment and the GitHub push are blocked on accounts only
-you can create — see "Blocked" below and `docs/DEPLOYMENT.md`.
+**Live site: <https://campusone-web.onrender.com>** · API: <https://campusone-api-hg7e.onrender.com>
+(health: `/api/health`) · Hosted on Render (static site + web service + PostgreSQL 16, Singapore).
+
+**Production data migration: complete and verified on 2026-10-01.** All 147,131 rows are in the
+Render database and match the local copy row for row.
 
 The existing dataset is intact: 6,025 users, 5,000 students, 1,000 faculty, 10,502 OD requests,
 SQLite integrity check `ok`. Nothing was reseeded.
@@ -22,6 +25,11 @@ SQLite integrity check `ok`. Nothing was reseeded.
 | Assistant battery on the full dataset, expected values computed in SQL | 31 of 31 (`docs/ASSISTANT_BATTERY.md`) |
 | Real app on the live database, read-only | 55 endpoints, all 200, all under 1 s |
 | Production-mode rehearsal on PostgreSQL | Full OD flow, document storage, CORS, health |
+| **Production data migration to Render** | 33 tables, 147,131 rows, 0 differing rows; 7 relationship spot checks |
+| **Direct check of the Render database** | `student1`, `faculty1`, `admin` present; bcrypt accepts each demo password and rejects a wrong one; 0 orphaned rows; 51 foreign keys enforced |
+| **Deployed frontend bundle** | Built with `https://campusone-api-hg7e.onrender.com/api`; CORS allows only the frontend origin |
+| **Live browser smoke test** (`e2e/live-smoke.spec.ts`) | 3 of 3: each role signs in on the live site and sees the migrated figures |
+| **Live OD flow in a browser** | Student submitted with a document, class advisor approved, student's open page updated without a reload |
 | SQLite → PostgreSQL data copy | 147,131 rows, row-by-row identical |
 | Frontend `npm run build` (Windows and Linux container) | passes |
 
@@ -105,6 +113,18 @@ SQLite integrity check `ok`. Nothing was reseeded.
 - Fallback: with an invalid key, with the key removed, and with simulated rate limits,
   overload, timeouts, blocked or truncated replies, the deterministic answer is returned.
 
+**Deployment — verified on the live site (2026-10-01)**
+- Frontend, API and database are running on Render from `render.yaml`. The API reports
+  `environment: production`, database ok, and Gemini as the configured LLM.
+- Signing in as `student1`, `faculty1` and `admin` on the live site shows populated data:
+  attendance 87.6% and CGPA 8.42 for the student, 3 subjects and 1,667 students for the faculty
+  member, 5,000 students / 1,000 faculty / 1,427 offers / 7,273 applications for the admin, and
+  the OD analytics for 10,500+ requests. Every API call went to the backend host and returned 200.
+- One real OD request was run through production: request #10503 "Tech Symposium", 3 hours on
+  12 Oct 2026. The database holds its four audit rows (create, submit, route to advisor, approve
+  by `faculty1`), two attendance credits, and the uploaded document in database storage with
+  fields extracted by Gemini. The student's balance on production is now 3 used, 37 remaining.
+
 ### Implemented but Untested
 
 - **The Anthropic provider, live.** It remains fully supported through the same abstraction
@@ -115,10 +135,11 @@ SQLite integrity check `ok`. Nothing was reseeded.
   the same path but was not itself uploaded in the live run.
 - **Gemini under sustained load.** Free keys are rate limited; the fall-through to the next
   model and to the deterministic answer is tested, but only at demo-level traffic.
-- **`render.yaml` on Render itself.** The start command, production settings and PostgreSQL
-  behaviour were rehearsed locally; the blueprint file has not been applied on Render.
-- **CI on GitHub Actions.** The same commands pass in Linux containers; the workflow has not
-  run on GitHub.
+- **HOD route, clarification and rejection on production.** Only the submit → advisor approves
+  path was run on the live site; the other paths are tested locally on SQLite and PostgreSQL.
+- **Image documents on production.** The live request used a text document.
+- **CI on GitHub Actions.** The same commands pass in Linux containers; the result of the
+  workflow run on GitHub has not been checked from here.
 - **`alembic downgrade`** from 0002 to 0001 (written, never run).
 - **Policy and institution-profile forms in the browser.** Their APIs are tested; the two
   forms were not clicked through in a browser test.
@@ -140,12 +161,16 @@ SQLite integrity check `ok`. Nothing was reseeded.
 
 | Item | Blocked on |
 |---|---|
-| Push to GitHub, CI run | A GitHub repository under your account (`gh` is not installed and no remote exists). |
-| Cloud deployment, live URL | A Render account and three dashboard values (`docs/DEPLOYMENT.md` step 2). |
-| Data in the deployed database | The External Database URL from your Render dashboard (step 3). |
-| Browser tests against the deployed URL | A live URL (step 4). |
-| LLM features on the deployed site | Your Gemini key pasted into Render's environment settings (step 5). Locally it is already in `backend/.env`. |
 | Live verification of the Anthropic provider | An Anthropic API key (optional; Gemini covers the features). |
+
+### Housekeeping after go-live
+
+- The Render database password was shared in a chat transcript during the migration and
+  should be rotated in the Render dashboard (see `docs/DEPLOYMENT.md`).
+- Request #10503 on production is a verification artefact for `student1`; it is approved, so it
+  cannot be cancelled in the app and stays as demo data, using 3 of the student's 40 hours.
+- The free Render plan sleeps the API after about 15 minutes idle (first request then takes
+  30–60 seconds) and the free database expires after its trial period unless upgraded.
 
 ## One incident to know about
 
@@ -167,9 +192,9 @@ backend identifies itself as the test instance.
 
 ## Demo click-through
 
-Run both servers (README §1) and open http://localhost:5173. Use two browser windows (or one
+Open the live site <https://campusone-web.onrender.com> (or run both servers locally, README §1, and open http://localhost:5173). Use two browser windows (or one
 normal and one private window) so the student and the approver are signed in at the same time.
-This creates real OD requests for `student1` in your local database.
+This creates real OD requests for `student1`. On the live site `student1` already has 3 hours used by request #10503, so the figures in steps 1 and 14 are 37h available and 16 used / 24 remaining there.
 
 **Student submits**
 1. Window A: sign in as `student1`. Click **On-Duty (OD)**. Note "Available to request: 40h".

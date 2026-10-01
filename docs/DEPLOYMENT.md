@@ -18,6 +18,38 @@ Free-plan limits to know before a demo: the API sleeps after about 15 minutes id
 period (currently about 30 days) unless upgraded. For anything beyond a demo use the paid
 starter plans by changing `plan:` in `render.yaml`.
 
+## Current deployment (2026-10-01)
+
+| | |
+|---|---|
+| Frontend | <https://campusone-web.onrender.com> |
+| API | <https://campusone-api-hg7e.onrender.com> (Render added the `-hg7e` suffix) |
+| `VITE_API_BASE_URL` on `campusone-web` | `https://campusone-api-hg7e.onrender.com/api` |
+| `CORS_ORIGINS` on `campusone-api` | `https://campusone-web.onrender.com` |
+| Database | `campusone-db`, loaded and verified from the local SQLite file |
+
+Lesson from the first deploy: the frontend was built before `VITE_API_BASE_URL` was set, so it
+called `/api` on the static site itself and every request silently failed while the login page
+loaded normally. After changing that variable, redeploy the static site with the build cache
+cleared — the value is baked in at build time. Check with:
+`npx playwright test e2e/live-smoke.spec.ts` (with `E2E_BASE_URL` set).
+
+### Rotating the database password
+
+This is done in the Render dashboard, on the `campusone-db` page (look for the credentials /
+connections section; the exact control depends on your plan and Render's current UI). It has
+not been done or tested as part of this project, so treat the following as a checklist rather
+than a verified procedure:
+
+1. Create the new credential (or reset the password) for the database.
+2. Check `campusone-api` → **Environment** → `DATABASE_URL`. It is linked to the database by
+   the blueprint, so it should show the new internal URL by itself. If it still shows the old
+   password, trigger a manual deploy of `campusone-api`; if it is still old after that, paste
+   the new Internal Database URL in by hand.
+3. Confirm `https://campusone-api-hg7e.onrender.com/api/health` reports `"database": "ok"`
+   and that you can still sign in.
+4. Confirm the old External Database URL is refused (remove the old credential if Render kept it).
+
 ## What has been verified locally
 
 - The exact production start command, with `APP_ENV=production`, against PostgreSQL 16:
