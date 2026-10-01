@@ -12,7 +12,19 @@ from pathlib import Path
 # Environment must be set before the application is imported.
 _TMP = Path(tempfile.mkdtemp(prefix="campusone-test-"))
 os.environ["APP_ENV"] = "development"
-os.environ["DATABASE_URL"] = f"sqlite:///{(_TMP / 'test.db').as_posix()}"
+# Default: a throwaway SQLite file. Set TEST_DATABASE_URL to run the same suite on
+# PostgreSQL - the database name must contain "test" because its schema is wiped first.
+_PG_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
+if _PG_URL:
+    from sqlalchemy import create_engine as _ce, text as _text
+    from sqlalchemy.engine import make_url as _make_url
+    assert "test" in (_make_url(_PG_URL).database or ""), "TEST_DATABASE_URL must point at a database named *test*"
+    with _ce(_PG_URL, isolation_level="AUTOCOMMIT").connect() as _c:
+        _c.execute(_text("DROP SCHEMA IF EXISTS public CASCADE"))
+        _c.execute(_text("CREATE SCHEMA public"))
+    os.environ["DATABASE_URL"] = _PG_URL
+else:
+    os.environ["DATABASE_URL"] = f"sqlite:///{(_TMP / 'test.db').as_posix()}"
 os.environ["JWT_SECRET"] = "test-only-secret-key-not-used-anywhere-else-0123456789"
 os.environ["AUTO_SEED"] = "false"
 os.environ["STORAGE_BACKEND"] = "local"

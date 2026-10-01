@@ -189,31 +189,36 @@ def update_application_status(application_id: int, payload: ApplicationStatusUpd
 
 @router.get("/admin/analytics")
 def placement_analytics(db: Session = Depends(get_db), user: models.User = Depends(require_admin)):
-    apps = db.query(models.Application).all()
-    offered = [a for a in apps if a.status == "Offered"]
-    packages = [a.drive.company.ctc_lpa for a in offered]
-    dept_stats = {}
-    for a in offered:
-        code = a.student.department.code
-        dept_stats.setdefault(code, {"offers": 0, "packages": []})
-        dept_stats[code]["offers"] += 1
-        dept_stats[code]["packages"].append(a.drive.company.ctc_lpa)
-    dept_summary = [
-        {
-            "department": code, "offers": v["offers"],
-            "avg_ctc_lpa": round(sum(v["packages"]) / len(v["packages"]), 2) if v["packages"] else 0,
-            "highest_ctc_lpa": max(v["packages"]) if v["packages"] else 0,
-        }
-        for code, v in dept_stats.items()
-    ]
+    # Aggregated in SQL: the previous version loaded every application and its
+    # student, drive and company one row at a time (10 s at 7,000 applications).
+    status_counts = dict(db.query(models.Application.status, func.count(models.Application.id))
+                         .group_by(models.Application.status).all())
+    offers = (
+        db.query(models.Department.code, func.count(models.Application.id),
+                 func.avg(models.Company.ctc_lpa), func.max(models.Company.ctc_lpa), func.sum(models.Company.ctc_lpa))
+        .select_from(models.Application)
+        .join(models.Student, models.Student.id == models.Application.student_id)
+        .join(models.Department, models.Department.id == models.Student.department_id)
+        .join(models.PlacementDrive, models.PlacementDrive.id == models.Application.drive_id)
+        .join(models.Company, models.Company.id == models.PlacementDrive.company_id)
+        .filter(models.Application.status == "Offered")
+        .group_by(models.Department.id, models.Department.code)
+        .order_by(models.Department.id)
+        .all()
+    )
+    total_offers = sum(row[1] for row in offers)
+    total_ctc = sum(float(row[4] or 0) for row in offers)
     return {
-        "total_applications": len(apps),
-        "total_offers": len(offered),
-        "average_ctc_lpa": round(sum(packages) / len(packages), 2) if packages else 0,
-        "highest_ctc_lpa": max(packages) if packages else 0,
-        "department_summary": dept_summary,
+        "total_applications": sum(status_counts.values()),
+        "total_offers": total_offers,
+        "average_ctc_lpa": round(total_ctc / total_offers, 2) if total_offers else 0,
+        "highest_ctc_lpa": max((float(row[3]) for row in offers), default=0),
+        "department_summary": [
+            {"department": code, "offers": n, "avg_ctc_lpa": round(float(avg), 2), "highest_ctc_lpa": float(top)}
+            for code, n, avg, top, _ in offers
+        ],
         "status_breakdown": {
-            status: len([a for a in apps if a.status == status])
+            status: status_counts.get(status, 0)
             for status in ["Applied", "Shortlisted", "Interview", "Offered", "Rejected"]
         },
     }

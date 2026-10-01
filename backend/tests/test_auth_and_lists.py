@@ -217,6 +217,7 @@ def test_production_refuses_to_start_without_real_secrets():
     assert code == 0, err
 
 
+@pytest.mark.skipif(not config.IS_SQLITE, reason="copies the SQLite test database file")
 def test_seed_refuses_to_wipe_a_populated_database(tmp_path):
     """python -m app.seed must not drop tables that already hold data unless explicitly forced."""
     import shutil

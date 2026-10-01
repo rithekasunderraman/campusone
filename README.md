@@ -1,259 +1,174 @@
 # CampusOne AI – Integrated University Campus Management & Student Success Portal
 
-A full-stack university ERP-style portal: Student / Faculty / Admin dashboards, academics,
-attendance, exams, timetable, fees, library, placement portal, and a database-aware AI
-Campus Assistant.
+A full-stack university portal: Student / Faculty / Admin dashboards, academics, attendance,
+exams, timetable, fees, library, placements, campus life, an **enterprise On-Duty (OD)
+workflow** with document checks and audit trail, and a database-grounded AI Campus Assistant.
 
-**Stack:** React + TypeScript + Vite + Tailwind CSS (frontend) · FastAPI + SQLAlchemy + SQLite (backend) · JWT auth · Recharts
+**Stack:** React + TypeScript + Vite + Tailwind (frontend) · FastAPI + SQLAlchemy + Alembic
+(backend) · SQLite locally, PostgreSQL in production · JWT auth · optional Claude API.
 
----
-
-## 1. Project structure
-
-```
-campusone/
-├── backend/
-│   ├── requirements.txt
-│   ├── campusone.db              # created automatically on first run
-│   └── app/
-│       ├── main.py               # FastAPI app entrypoint
-│       ├── database.py           # SQLAlchemy engine/session
-│       ├── models.py             # all database models
-│       ├── schemas.py            # Pydantic request/response models
-│       ├── auth.py               # JWT + password hashing
-│       ├── utils.py              # shared serialization helpers
-│       ├── seed.py               # realistic demo data generator
-│       └── routers/
-│           ├── auth.py           # /api/auth/*
-│           ├── student.py        # /api/student/*
-│           ├── faculty.py        # /api/faculty/*
-│           ├── admin.py          # /api/admin/*
-│           ├── common.py         # /api/announcements, /api/events
-│           ├── placement.py      # /api/placement/*
-│           └── ai_assistant.py   # /api/ai/chat
-└── frontend/
-    ├── index.html
-    ├── package.json
-    ├── vite.config.ts / tailwind.config.js / tsconfig*.json
-    └── src/
-        ├── main.tsx / App.tsx / index.css
-        ├── api/client.ts             # axios instance + auth interceptor
-        ├── context/AuthContext.tsx   # login state
-        ├── hooks/useFetch.ts         # generic data-fetching hook
-        ├── layouts/DashboardLayout.tsx
-        ├── components/Common.tsx     # StatCard, ProgressBar, Pill, etc.
-        └── pages/
-            ├── Login.tsx
-            ├── AIAssistant.tsx
-            ├── student/  (Dashboard, Attendance, Marks, Exams, Timetable, Fees, Library, Placement, Announcements, Campus Life)
-            ├── faculty/  (Dashboard, Subjects, Students, Attendance, Marks, Exams, Timetable, Announcements)
-            └── admin/    (Dashboard, Students, Faculty, Departments, Courses, Placement, Reports, Announcements)
-```
+Further documents: [`STATUS_REPORT.md`](STATUS_REPORT.md) (what is implemented and tested, demo
+script) · [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) · [`docs/MULTI_TENANCY.md`](docs/MULTI_TENANCY.md)
+· [`docs/ASSISTANT_BATTERY.md`](docs/ASSISTANT_BATTERY.md) · [`AUDIT_REPORT.md`](AUDIT_REPORT.md).
 
 ---
 
-## 2. Prerequisites
+## 1. Run it locally
 
-- Python 3.10+ (3.11 recommended)
-- Node.js 18+ and npm
-- Windows, macOS, or Linux — the commands below are Windows-friendly (PowerShell / cmd)
+Prerequisites: Python 3.10+, Node.js 18+ (22 recommended).
 
----
-
-## 3. Backend setup (FastAPI)
+**Backend** (terminal 1)
 
 ```powershell
-cd campusone\backend
+cd backend
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-Run the API server:
-
-```powershell
+copy .env.example .env          # then set JWT_SECRET (see the comment in the file)
 uvicorn app.main:app --reload --port 8000
 ```
 
-- On first run the app automatically creates `campusone.db` (SQLite) and seeds it with
-  realistic demo data (departments, students, faculty, subjects, attendance, marks, exams,
-  timetable, fees, library, announcements, events, companies, placement drives, and
-  applications).
-- To force a fresh reseed at any time (e.g. after changing `seed.py`):
-  ```powershell
-  python -m app.seed
-  ```
-- API docs (interactive): http://127.0.0.1:8000/docs
-- Health check: http://127.0.0.1:8000/api/health
+- An existing `campusone.db` is used as it is. If its schema is behind the code, the server
+  stops and tells you to run `alembic upgrade head` (back the file up first).
+- With no database at all, the schema is created by Alembic and demo data is seeded
+  (5,000 students, 1,000 faculty, 25 admins) — development mode only.
+- API docs: http://127.0.0.1:8000/docs · Health: http://127.0.0.1:8000/api/health
 
-### Optional: enable LLM-polished AI Assistant replies
-
-By default the AI Campus Assistant answers entirely from the database using a reliable
-intent-matching engine — no external API key needed, and it never dead-ends on
-"no matching information found."
-
-If you'd like the assistant to rephrase those same database facts more conversationally
-using an LLM, install the optional dependency and set an API key before starting the server:
+**Frontend** (terminal 2)
 
 ```powershell
-pip install anthropic
-set ANTHROPIC_API_KEY=your-key-here      # PowerShell: $env:ANTHROPIC_API_KEY="your-key-here"
-```
-
-If the key is missing, the package isn't installed, or the call fails for any reason, the
-assistant automatically falls back to the plain database-generated answer.
-
----
-
-## 4. Frontend setup (React + Vite)
-
-Open a **second terminal**:
-
-```powershell
-cd campusone\frontend
+cd frontend
 npm install
 npm run dev
 ```
 
-- App runs at http://localhost:5173
-- The Vite dev server proxies all `/api/*` requests to `http://127.0.0.1:8000`, so make sure
-  the backend is running first.
+Open http://localhost:5173. The dev server proxies `/api` to the backend on port 8000.
+
+### Demo accounts
+
+| Role | Username | Password | Notes |
+|---|---|---|---|
+| Admin (institution-wide) | `admin` | `admin123` | Sees every department; can edit OD policy |
+| Admin (HOD of CSE) | `admin2` | `admin123` | `admin3` = ECE, `admin4` = MECH |
+| Faculty | `faculty1` | `faculty123` | Class advisor of `student1`; teaches CSE301/303/305 |
+| Student | `student1` | `student123` | Manish Kumar, 21CSE1042, CSE |
+
+All generated accounts use the same per-role passwords.
 
 ---
 
-## 5. Demo credentials
+## 2. Configuration
 
-| Role    | Username   | Password    | Notes                                   |
-|---------|-----------|-------------|------------------------------------------|
-| Admin   | admin     | admin123    | Dr. Ramesh Venkataraman                  |
-| Faculty | faculty1  | faculty123  | Dr. Anand Subramaniam, CSE department    |
-| Student | student1  | student123  | Manish Kumar, 21CSE1042, CSE, Sem 5      |
+All settings come from environment variables (`backend/.env` locally, the host's settings in
+production). `backend/.env.example` documents each one.
 
-The seed now creates **25 admins, 1,000 faculty, and 5,000 students** (6,025 user accounts total),
-plus interconnected academic and student-life records. All generated student/faculty demo accounts use
-the same role password patterns:
-`faculty123` / `student123`) seeded for realistic class rosters and analytics — useful when
-demonstrating faculty attendance/marks entry or admin-level reports across multiple students.
-
-The login page has one-click buttons to autofill the three primary demo accounts.
+| Variable | Purpose |
+|---|---|
+| `APP_ENV` | `development` or `production`. Production refuses to start with missing or weak secrets. |
+| `JWT_SECRET` | Signs login tokens. Required in production (32+ characters). |
+| `DATABASE_URL` | Empty locally = SQLite file. PostgreSQL URL in production. |
+| `CORS_ORIGINS` | Allowed frontend origin(s). Required in production; `*` is rejected. |
+| `ANTHROPIC_API_KEY`, `LLM_MODEL` | Optional LLM features. Everything works without them. |
+| `STORAGE_BACKEND` | `local` (filesystem) or `database` for uploaded OD documents. |
 
 ---
 
-## 6. Implemented features
+## 3. The OD workflow
 
-**Student portal:** profile, accommodation/hostel details, subject-wise attendance with 75% threshold flags, marks &
-grades (with a bar chart), exam timetable, weekly class timetable, fees status, library
-records, placement portal (view eligible drives, apply, track application status), Campus Life (clubs, upcoming club events, attended events, volunteering, OD usage and request history),
-announcements & events, AI assistant.
+```
+Draft → Submitted → Under faculty review → [Clarification requested → Resubmitted →]
+        [Under HOD review, when policy requires] → Approved | Rejected
+Cancelled: by the student from any non-final state
+```
 
-**Faculty portal:** profile, assigned subjects, student directory (filterable by subject),
-attendance management (editable, per-student), marks entry (editable, auto-computed grade),
-exam schedule, teaching timetable, announcements, AI assistant.
+- **Rules checked before submission** (deterministic, from institution policy): dates within
+  the term, hours within the per-request limit, enough OD balance, no duplicate request for the
+  same event, no overlap with the student's other requests, attendance at or above the threshold.
+- **Routing:** to the student's class advisor; requests over the HOD threshold also need the
+  department head.
+- **Integrity:** every transition is one version-checked update plus one audit row in the same
+  transaction; a second reviewer acting on a stale version gets a conflict; approval, balance
+  check and attendance credits commit or roll back together; audit rows cannot be edited.
+- **Documents:** PDF, image or text. Event name, date, venue and organiser are extracted and
+  compared with the form; differences become advisory flags for the approver. Nothing is
+  auto-rejected, and no automated step can change a request's status.
+- **Screens:** student apply wizard, dashboard and request timeline; faculty approval queue;
+  admin/HOD queue, analytics, policy editor and audit log. Lists refresh every few seconds.
 
-**Admin portal:** institution-wide dashboard (student/faculty counts, attendance, academic
-performance, department breakdown), student directory, faculty directory, departments,
-courses & subjects, placement portal management (add companies, create drives, review and
-update applicant status, view analytics — average/highest CTC, department-wise offers),
-reports & analytics (attendance and academic performance charts), announcements & events
-management (create + broadcast).
-
-**AI Campus Assistant:** a dedicated module (not the homepage) that answers using the
-logged-in user's own database records — attendance, marks, CGPA/SGPA, timetable, exams,
-faculty, fees, library, and placement eligibility for students, plus club memberships, club events, event attendance, volunteering, accommodation and OD requests/usage; subjects, class performance,
-and schedules for faculty; institution-wide statistics for admins. Rule-based by default,
-with optional LLM rephrasing (see above). Always grounds its answer in real data — it never
-just says "no matching information found."
-
-**Auth:** JWT-based login with role-based route protection on both the API and the frontend.
+Key code: `backend/app/od_workflow.py` (state machine), `od_service.py` (rules),
+`od_intelligence.py` (documents), `routers/od.py` (API), `frontend/src/pages/*/OD*.tsx`.
 
 ---
 
+## 4. AI Campus Assistant
 
-## 6A. Student-life data model and APIs
-
-The student-life extension is normalized and connected through foreign keys:
-
-- `students.accommodation_type` → `hostel_allocations` → `hostels` for Hosteller/Day Scholar data.
-- `students` ↔ `clubs` through `club_memberships`.
-- `clubs` → `club_events`.
-- `students` ↔ `club_events` through `event_attendance` and `event_volunteers`.
-- `students` → `od_requests` → optional `club_events`, with approved hours calculated against a 40-hour annual entitlement.
-- Unique constraints prevent duplicate club membership, attendance, or volunteer records for the same student/event.
-
-Student-life API endpoints:
-
-- `GET /api/student/campus-life/profile`
-- `GET /api/student/campus-life/clubs`
-- `GET /api/student/campus-life/events/upcoming`
-- `GET /api/student/campus-life/events/attended`
-- `GET /api/student/campus-life/events/volunteered`
-- `GET /api/student/campus-life/od`
-- `GET /api/student/campus-life/overview`
-
-The AI Assistant routes student-life questions through `app/agents/campus_life_agent.py` before the
-general academic intents. It is database-grounded and always scopes records to the authenticated student.
-Example supported questions include:
-
-- “What clubs am I part of?”
-- “What are my club’s upcoming events?”
-- “Which events have I attended?”
-- “How many events have I volunteered for?”
-- “How many OD hours have I used and how many remain?”
-- “Am I a hosteller or day scholar?”
-
-## 6B. Large dataset generation
-
-`python -m app.seed` resets and regenerates the complete dataset. The generator creates:
-
-- 5,000 students
-- 1,000 faculty
-- 25 admins
-- 3 departments and 3 courses
-- Academic attendance, marks, exams, timetables, fees, library and placement data
-- 12 hostels and hosteller allocations
-- 30 clubs
-- 360 club events across past and upcoming dates
-- Realistic club memberships for every student
-- Interconnected event attendance and volunteering
-- OD requests with approved/pending/rejected states
-
-For the larger seed, the script reuses one bcrypt hash per role and uses SQLAlchemy bulk inserts
-for high-volume student-life rows. This keeps the seed substantially faster than hashing every account
-independently or committing every row individually.
-
-**Important:** after pulling this version, run `python -m app.seed` once to rebuild an older database.
-The project intentionally uses a reset-and-seed workflow rather than attempting an automatic migration
-of an old SQLite file.
-
-## 7. Testing instructions
-
-1. Start the backend, confirm `/api/health` returns `{"status": "ok"}`.
-2. Start the frontend, open http://localhost:5173.
-3. Log in as `student1` / `student123` → verify the dashboard shows real attendance %, CGPA,
-   fee status, and upcoming exams. Click through every sidebar item.
-4. Log in as `faculty1` / `faculty123` → open **Attendance**, edit a student's attended/total
-   classes, click Save, confirm the percentage updates. Do the same in **Marks Entry**.
-5. Log in as `admin` / `admin123` → open **Placement Portal**, add a company, create a drive,
-   then log back in as a student in an eligible department to confirm the drive appears under
-   "Eligible drives" and can be applied to. Return to the admin view and update that
-   application's status.
-6. On any role, open **AI Assistant** and try the suggested questions (e.g. "What is my
-   attendance?", "Show attendance for my classes", "What is the placement summary?").
+Answers are resolved deterministically from the database for the logged-in user; an LLM, when
+configured, only rephrases those facts or gives a best-effort answer from that user's own
+authorised data. Examples: "Can I apply for OD tomorrow?", "How many OD hours do I have left?",
+"Why was my last application rejected?", "How many more classes can I miss?" (student);
+"How many OD requests are pending my approval?" (faculty); "Show department-wise OD
+statistics", "Which department has the highest OD utilisation?" (admin).
 
 ---
 
-## 8. Architecture notes
+## 5. Database and migrations
 
-- **Auth & scoping:** every student/faculty endpoint resolves the logged-in `User` → their
-  `Student`/`Faculty` profile server-side from the JWT, so a student can never query another
-  student's records by manipulating IDs in the frontend.
-- **Data model:** a normalized relational schema (Users → Students/Faculty → Departments →
-  Courses → Subjects → Attendance/Marks/Exams/Timetable; Companies → Drives → Applications)
-  keeps every module internally consistent — e.g. a subject's attendance, marks, exam, and
-  timetable records all reference the same `Subject` row and the same assigned `Faculty`.
-- **AI Assistant:** intent matching happens against the same SQLAlchemy queries the REST
-  endpoints use, so the assistant's answers are guaranteed to match what the dashboards show.
-  The optional LLM step only rephrases; it never receives write access or invents facts.
-- **Frontend:** a single `useFetch` hook + `client.ts` axios instance handles all data
-  fetching and auth headers; role-based sidebars and route guards in `App.tsx` keep each
-  portal's pages isolated from the others.
+Schema changes are Alembic migrations in `backend/migrations/versions`.
+
+```powershell
+alembic current            # which revision the database is at
+alembic upgrade head       # apply pending migrations (back up first)
+```
+
+`python -m app.seed` **drops every table** and regenerates demo data. It refuses to run on a
+database that already has data unless you pass `--force-reset`, and never runs in production.
+
+Moving the data to PostgreSQL: `python -m scripts.migrate_sqlite_to_postgres --target <url>`
+(see `docs/DEPLOYMENT.md`).
+
+---
+
+## 6. Tests
+
+```powershell
+cd backend
+pip install -r requirements-dev.txt
+pytest                      # 150 tests on a throwaway database built from the migrations
+
+cd ..\frontend
+npx playwright test         # 8 browser tests; starts its own servers on a COPY of the database
+```
+
+Neither suite touches `campusone.db`. The browser tests use Microsoft Edge by default
+(`E2E_CHANNEL=chrome` to change) and refuse to run unless they are talking to the test backend.
+To run the backend suite on PostgreSQL set `TEST_DATABASE_URL` to a database whose name
+contains `test`.
+
+---
+
+## 7. Project structure
+
+```
+campusone/
+├── render.yaml                     # deployment blueprint (database + API + static site)
+├── .github/workflows/ci.yml        # lint, tests, type-check and build on every push
+├── docs/                           # deployment, multi-tenancy assessment, assistant evidence
+├── backend/
+│   ├── alembic.ini, migrations/    # schema history (0001 baseline, 0002 OD workflow)
+│   ├── scripts/                    # SQLite→PostgreSQL migration, e2e server, assistant battery
+│   ├── tests/                      # pytest suite
+│   └── app/
+│       ├── main.py, config.py, database.py, db_setup.py, auth.py, models.py, seed.py
+│       ├── od_workflow.py, od_service.py, od_intelligence.py, od_bootstrap.py
+│       ├── storage.py, llm.py
+│       ├── agents/                 # assistant intents (campus life, OD)
+│       └── routers/                # auth, student, faculty, admin, common, placement,
+│                                   # campus_life, od, ai_assistant
+└── frontend/
+    ├── e2e/                        # Playwright browser tests
+    └── src/
+        ├── api/client.ts, context/AuthContext.tsx, hooks/useFetch.ts
+        ├── components/Common.tsx, components/OD.tsx
+        ├── layouts/DashboardLayout.tsx
+        └── pages/ (student, faculty, admin, Login, AIAssistant)
+```
