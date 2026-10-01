@@ -1,6 +1,6 @@
 # CampusOne — Status Report
 
-Date: 2026-10-01 · Branch `main` · 8 commits, one per phase (phases 7+8 and 9+10 share a commit).
+Date: 2026-10-01 · Branch `main` · 9 commits: a baseline, then one per phase (7+8, 9+10 and 11+12 share commits).
 
 **Live deployed URL: none yet.** Deployment and the GitHub push are blocked on accounts only
 you can create — see "Blocked" below and `docs/DEPLOYMENT.md`.
