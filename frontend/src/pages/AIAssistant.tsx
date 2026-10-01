@@ -10,18 +10,20 @@ interface Message {
 }
 
 const SUGGESTIONS: Record<string, string[]> = {
-  student: ["What is my attendance?", "What are my marks?", "What is my CGPA?", "Show my timetable",
-             "When is my next exam?", "Which companies am I eligible for?", "What is my fees status?"],
-  faculty: ["What subjects do I teach?", "Show attendance for my classes", "Show class performance",
-             "What is my exam schedule?", "Show my timetable"],
-  admin: ["How many students are enrolled?", "Show department overview", "What is the placement summary?",
-           "What is the overall attendance?"],
+  student: ["Can I apply for OD tomorrow?", "How many OD hours do I have left?", "What is the status of my last OD application?",
+             "How many more classes can I miss?", "What is my attendance?", "When is my next exam?",
+             "Which companies am I eligible for?", "What is my fees status?"],
+  faculty: ["How many OD requests are pending my approval?", "How many OD requests have I approved this month?",
+             "Which students are below 75% attendance?", "What subjects do I teach?", "Show attendance for my classes"],
+  admin: ["Show department-wise OD statistics", "How many OD requests are pending?",
+           "Which department has the highest OD utilisation?", "How many students are enrolled?",
+           "What is the placement summary?"],
 };
 
 export default function AIAssistant() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", text: `Hi ${user?.full_name.split(" ")[0] || ""}! I'm your CampusOne AI assistant. Ask me about your ${user?.role === "student" ? "attendance, marks, timetable, fees, or placements" : user?.role === "faculty" ? "subjects, classes, attendance, or exam schedule" : "institution-wide statistics and reports"}.` },
+    { role: "assistant", text: `Hi ${user?.full_name.split(" ")[0] || ""}! I'm your CampusOne AI assistant. Ask me about your ${user?.role === "student" ? "attendance, marks, timetable, fees, placements, or On-Duty (OD) requests" : user?.role === "faculty" ? "subjects, classes, attendance, exams, or OD approvals" : "institution-wide statistics, reports and OD oversight"}.` },
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);

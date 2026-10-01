@@ -204,3 +204,33 @@ test("overlapping request is blocked at the eligibility step", async ({ browser 
   await expect(student.getByRole("button", { name: "Submit request" })).toBeDisabled();
   await student.context().close();
 });
+
+test("AI assistant answers OD questions from the same data, for each role", async ({ browser }) => {
+  const ask = async (page: Page, question: string) => {
+    await page.getByPlaceholder("Type your question…").fill(question);
+    await page.getByPlaceholder("Type your question…").press("Enter");
+  };
+
+  const student = await login(browser, "student1");
+  await student.getByRole("link", { name: "AI Assistant" }).click();
+  await ask(student, "How many OD hours do I have left?");
+  // Test 1 approved 3h and test 2 approved 10h for this student.
+  await expect(student.getByText(/used 13 OD hours and have 27 hours remaining out of 40/)).toBeVisible();
+  await ask(student, "Why was my last OD application rejected?");
+  await expect(student.getByText(/Reason: Cannot verify participation\./)).toBeVisible();
+  await ask(student, "Can I apply for OD tomorrow?");
+  await expect(student.getByText(/you can apply for OD tomorrow|You already have an OD request tomorrow/)).toBeVisible();
+
+  const faculty = await login(browser, "faculty1");
+  await faculty.getByRole("link", { name: "AI Assistant" }).click();
+  await ask(faculty, "How many OD requests have I approved this month?");
+  await expect(faculty.getByText(/This month you approved 1 OD request\(s\), recommended 1 to the HOD, rejected 1/)).toBeVisible();
+
+  const admin = await login(browser, "admin");
+  await admin.getByRole("link", { name: "AI Assistant" }).click();
+  await ask(admin, "Show department-wise OD statistics");
+  await expect(admin.getByText(/Department-wise OD statistics for this term/)).toBeVisible();
+  await expect(admin.getByText(/- MECH: /)).toBeVisible();
+
+  for (const p of [student, faculty, admin]) await p.context().close();
+});
