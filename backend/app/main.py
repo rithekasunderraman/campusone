@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from . import config
+from . import config, llm
 from .database import engine
 from .db_setup import prepare_database
 from .routers import auth, student, faculty, admin, common, placement, ai_assistant, campus_life, od
@@ -43,7 +43,9 @@ def health():
         return JSONResponse(status_code=503, content={
             "status": "degraded", "service": "CampusOne AI backend", "database": "unreachable"})
     return {"status": "ok", "service": "CampusOne AI backend", "database": "ok", "environment": config.APP_ENV,
-            "instance": config.APP_INSTANCE}
+            "instance": config.APP_INSTANCE,
+            "llm": (f"{llm.provider()} ({config.GEMINI_MODEL if llm.provider() == 'gemini' else config.LLM_MODEL})"
+                    if llm.available() else None)}
 
 
 @app.on_event("startup")

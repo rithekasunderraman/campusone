@@ -12,7 +12,10 @@ SQLite integrity check `ok`. Nothing was reseeded.
 
 | Check | Result |
 |---|---|
-| Backend tests (`pytest`, throwaway SQLite built from the migrations) | 150 passed |
+| Backend tests (`pytest`, throwaway SQLite built from the migrations) | 171 passed |
+| **Assistant battery on real Google Gemini calls**, full dataset | 35 of 35 (`docs/ASSISTANT_BATTERY_LLM.md`) |
+| **OD document flow on real Google Gemini calls** (text, PDF, image, injection) | 7 of 7 (`docs/LLM_LIVE_VERIFICATION.md`) |
+| Fallback with Gemini key invalid, and with the key removed (live) | Deterministic answers and extraction returned |
 | Same suite on PostgreSQL 16 | 149 passed, 1 SQLite-only test skipped |
 | Same suite in a clean Linux container (what CI runs) | 150 passed |
 | Browser tests (Playwright, Edge, on a copy of the full database) | 8 passed |
@@ -84,15 +87,34 @@ SQLite integrity check `ok`. Nothing was reseeded.
 - Sidebar collapses to a drawer on small screens; OD pages have no sideways scroll at 390 px.
 - CI workflow (both jobs rehearsed in Linux containers from the committed tree).
 
+**LLM features — verified with real calls to Google Gemini (2026-10-01)**
+- The LLM layer has two providers behind one interface, selected by `LLM_PROVIDER`
+  (`anthropic` or `gemini`). Verification used **Google Gemini** (`gemini-2.5-flash` answered;
+  `gemini-3.5-flash` and `gemini-flash-lite-latest` are configured as automatic fallbacks).
+- Assistant rephrasing of database facts: 33 questions across the three roles, every figure
+  intact. LLM wording is now accepted only if every number from the database sentence appears
+  unchanged; otherwise the database sentence is returned (enforced in code, tested).
+- Assistant best-effort answers from the caller's own data, including "I don't have that
+  information" for an out-of-scope question, a prompt-injection attempt that returned only
+  the caller's own record, and a department head asking about other departments.
+- Document field extraction with source and confidence tags, on an unlabelled text invitation
+  and a PDF; mismatch flags raised without rejecting the request.
+- Reading an image with the model's vision (a PNG poster with no text layer).
+- A document containing a prompt injection: status and approved hours unchanged.
+- Eligibility explanation worded by the model, for an eligible and a not-eligible case.
+- Fallback: with an invalid key, with the key removed, and with simulated rate limits,
+  overload, timeouts, blocked or truncated replies, the deterministic answer is returned.
+
 ### Implemented but Untested
 
-- **Every live LLM call.** No Anthropic API key was available. The code paths were exercised
-  with a stand-in client, so the logic around the LLM is tested, but no real request has been
-  made. This covers: assistant rephrasing, assistant best-effort answers, LLM field extraction,
-  reading images and scanned PDFs, the LLM eligibility explanation, and the request options
-  used (`claude-opus-5-5`, low effort, structured output, refusal fallback).
-- **Image and scanned-PDF documents** without a key are stored and flagged "not machine-read";
-  with a key they depend on the untested path above.
+- **The Anthropic provider, live.** It remains fully supported through the same abstraction
+  (`LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`) and its code is unchanged, but no Anthropic
+  key was available, so no real Claude request has been made. Its surrounding logic is covered
+  by the same tests as Gemini.
+- **Scanned PDFs through an LLM.** Images were verified live; a scanned (image-only) PDF uses
+  the same path but was not itself uploaded in the live run.
+- **Gemini under sustained load.** Free keys are rate limited; the fall-through to the next
+  model and to the deterministic answer is tested, but only at demo-level traffic.
 - **`render.yaml` on Render itself.** The start command, production settings and PostgreSQL
   behaviour were rehearsed locally; the blueprint file has not been applied on Render.
 - **CI on GitHub Actions.** The same commands pass in Linux containers; the workflow has not
@@ -122,7 +144,8 @@ SQLite integrity check `ok`. Nothing was reseeded.
 | Cloud deployment, live URL | A Render account and three dashboard values (`docs/DEPLOYMENT.md` step 2). |
 | Data in the deployed database | The External Database URL from your Render dashboard (step 3). |
 | Browser tests against the deployed URL | A live URL (step 4). |
-| Live LLM verification | An Anthropic API key (step 5). |
+| LLM features on the deployed site | Your Gemini key pasted into Render's environment settings (step 5). Locally it is already in `backend/.env`. |
+| Live verification of the Anthropic provider | An Anthropic API key (optional; Gemini covers the features). |
 
 ## One incident to know about
 

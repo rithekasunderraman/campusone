@@ -42,11 +42,16 @@ services:
         generateValue: true
       - key: STORAGE_BACKEND
         value: database
-      - key: LLM_MODEL
+      # LLM provider: "gemini" or "anthropic". Only the selected provider's key is used.
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL             # used when LLM_PROVIDER=anthropic
         value: claude-opus-5-5
+      - key: GEMINI_API_KEY        # optional; typed into the dashboard, never stored in the repo
+        sync: false
       - key: CORS_ORIGINS        # the frontend's public URL, e.g. https://campusone-web.onrender.com
         sync: false
-      - key: ANTHROPIC_API_KEY   # optional; leave empty to run on the deterministic engine
+      - key: ANTHROPIC_API_KEY   # optional; only used when LLM_PROVIDER=anthropic
         sync: false
 
   - type: web

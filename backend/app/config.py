@@ -91,6 +91,11 @@ AUTO_SEED = _bool("AUTO_SEED", default=not IS_PRODUCTION) and not IS_PRODUCTION
 # --- LLM (optional everywhere: every feature has a deterministic path) ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-opus-5-5").strip()
+# Which provider llm.py talks to: "anthropic" (default) or "gemini". Each uses its own key and model.
+LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "").strip().lower() or "anthropic")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+# One model, or several separated by commas: tried in order when one is overloaded or rate limited.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip() or "gemini-2.5-flash,gemini-3.5-flash,gemini-flash-lite-latest"
 
 # --- Document storage ---
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()  # local | database

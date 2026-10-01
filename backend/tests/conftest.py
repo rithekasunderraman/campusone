@@ -30,6 +30,8 @@ os.environ["AUTO_SEED"] = "false"
 os.environ["STORAGE_BACKEND"] = "local"
 os.environ["STORAGE_DIR"] = str(_TMP / "storage")
 os.environ["ANTHROPIC_API_KEY"] = ""
+os.environ["GEMINI_API_KEY"] = ""
+os.environ["LLM_PROVIDER"] = "anthropic"
 os.environ["CORS_ORIGINS"] = "http://localhost:5173"
 os.environ["MAX_UPLOAD_MB"] = "1"
 

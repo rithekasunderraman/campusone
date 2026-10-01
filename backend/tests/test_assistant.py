@@ -291,3 +291,17 @@ def test_department_head_best_effort_context_is_scoped(api, monkeypatch):
     ask(api, "hod_ece", "Give me a quick summary of everything")
     context = fake.calls[0]["content"]
     assert '"department": "ECE"' in context and '"department": "CSE"' not in context
+
+
+def test_llm_wording_is_discarded_if_it_drops_or_changes_a_figure(api, monkeypatch):
+    approve_one(api, hours=3)
+    facts = "You have used 3 OD hours and have 37 hours remaining out of 40 this semester."
+    for bad in ("You have 37 OD hours remaining this semester.",            # dropped 3 and 40
+                "You have used 3 hours and have 36 hours left out of 40.",   # altered a figure
+                "You have plenty of OD hours left!"):                        # no figures at all
+        FakeLLM(monkeypatch, bad)
+        out = ask(api, "stu1", "How many OD hours do I have left?")
+        assert (out["source"], out["response"]) == ("database", facts)
+    FakeLLM(monkeypatch, "Good news! You've used 3 of your 40 OD hours, so 37.0 hours remain.")
+    ok = ask(api, "stu1", "How many OD hours do I have left?")
+    assert ok["source"] == "database+llm" and ok["response"].startswith("Good news!")

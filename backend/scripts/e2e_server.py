@@ -39,8 +39,12 @@ def main() -> None:
         "STORAGE_DIR": str(WORK / "storage"),
         "CORS_ORIGINS": "http://localhost:5174,http://127.0.0.1:5174",
         "AUTO_SEED": "true",
-        "ANTHROPIC_API_KEY": os.getenv("E2E_ANTHROPIC_API_KEY", ""),
     })
+    if os.getenv("E2E_LLM") == "1":
+        print("e2e backend: LLM ENABLED - provider and key come from backend/.env")
+    else:
+        # Browser tests assert exact deterministic wording, so no provider may answer.
+        os.environ.update({"ANTHROPIC_API_KEY": "", "GEMINI_API_KEY": ""})
     sys.path.insert(0, str(BACKEND))
     os.chdir(BACKEND)
     import uvicorn

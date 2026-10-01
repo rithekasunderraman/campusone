@@ -53,7 +53,8 @@ The CI workflow (`.github/workflows/ci.yml`) runs on that first push.
 3. It asks for the three values that are deliberately not in the repo. Enter:
    - `VITE_API_BASE_URL` → `https://campusone-api.onrender.com/api`
    - `CORS_ORIGINS` → `https://campusone-web.onrender.com`
-   - `ANTHROPIC_API_KEY` → leave empty for now (optional, step 5)
+   - `GEMINI_API_KEY` → your Gemini key (optional, step 5), or leave empty
+   - `ANTHROPIC_API_KEY` → leave empty
 4. Click **Apply**.
 
 If Render reports that a name is taken it adds a suffix (for example
@@ -96,14 +97,23 @@ $env:E2E_BASE_URL = "https://campusone-web.onrender.com"
 npx playwright test e2e/od-flow.spec.ts
 ```
 
-### 5. Optional: turn on the LLM features — *needs your Anthropic API key*
+### 5. Optional: turn on the LLM features — *needs a key only you can paste into Render*
 
-Create a key at <https://console.anthropic.com>, then Render → `campusone-api` → **Environment**
-→ set `ANTHROPIC_API_KEY` → save (the service redeploys). This enables natural phrasing in the
-assistant, best-effort answers to questions outside the built-in intents, reading of image and
-scanned-PDF documents, and LLM field extraction. Without it every feature still works on the
-deterministic engine. Usage is billed to your Anthropic account; `LLM_MODEL` in `render.yaml`
-selects the model.
+The blueprint sets `LLM_PROVIDER=gemini`. In Render → `campusone-api` → **Environment**, set
+`GEMINI_API_KEY` to your Gemini key and save (the service redeploys). The key is stored by
+Render; it is not in the repository. `/api/health` then reports `"llm": "gemini (...)"`.
+
+This enables natural phrasing in the assistant, best-effort answers to questions outside the
+built-in intents, reading of image and scanned-PDF documents, and LLM field extraction. Without a
+key every feature still works on the deterministic engine.
+
+To use Claude instead, set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` (from
+<https://console.anthropic.com>); nothing else changes. `GEMINI_MODEL` (optional) and `LLM_MODEL`
+select the model for each provider.
+
+Free Gemini keys are rate limited (a handful of requests per minute). When a limit is hit or a
+model is overloaded, the next model in `GEMINI_MODEL` is tried, and if none answers the user gets
+the deterministic answer — the request never fails.
 
 ## Running the production configuration locally
 

@@ -68,7 +68,10 @@ production). `backend/.env.example` documents each one.
 | `JWT_SECRET` | Signs login tokens. Required in production (32+ characters). |
 | `DATABASE_URL` | Empty locally = SQLite file. PostgreSQL URL in production. |
 | `CORS_ORIGINS` | Allowed frontend origin(s). Required in production; `*` is rejected. |
-| `ANTHROPIC_API_KEY`, `LLM_MODEL` | Optional LLM features. Everything works without them. |
+| `LLM_PROVIDER` | `anthropic` (default) or `gemini`. Selects which LLM the app talks to. |
+| `ANTHROPIC_API_KEY`, `LLM_MODEL` | Used when the provider is `anthropic`. |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Used when the provider is `gemini`. |
+| | LLM features are optional: everything works without a key. |
 | `STORAGE_BACKEND` | `local` (filesystem) or `database` for uploaded OD documents. |
 
 ---
@@ -133,7 +136,7 @@ Moving the data to PostgreSQL: `python -m scripts.migrate_sqlite_to_postgres --t
 ```powershell
 cd backend
 pip install -r requirements-dev.txt
-pytest                      # 150 tests on a throwaway database built from the migrations
+pytest                      # 171 tests on a throwaway database built from the migrations
 
 cd ..\frontend
 npx playwright test         # 8 browser tests; starts its own servers on a COPY of the database
